@@ -1,0 +1,6 @@
+{
+  "name": "Frequency Visualizer",
+  "description": "A real-time audio frequency spectrum visualizer using Canvas and Microphone input.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
