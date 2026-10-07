@@ -1,6 +1,6 @@
 {
-  "name": "Frequency Visualizer",
-  "description": "A real-time audio frequency spectrum visualizer using Canvas and Microphone input.",
-  "requestFramePermissions": [],
+  "name": "Frequency Visualizer & Uconnect Audio Hub",
+  "description": "Real-time audio frequency visualizer, decibel threshold trigger, and 2-channel Uconnect RF/IR headphone bridge.",
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
