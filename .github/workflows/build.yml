@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit-and-build-android:
@@ -42,15 +42,45 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          gradle :app:assembleDebug
+          echo "=== Building Debug APK with Gradle ==="
+          gradle :app:assembleDebug --stacktrace
+          echo "=== Build Complete. Finding APK files ==="
+          find app/build/outputs/ -name "*.apk" -ls
 
-      - name: Upload Debug APK Artifact
+      - name: Prepare APK Output
+        run: |
+          mkdir -p release-apks
+          APK_FILE=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            echo "Found APK: $APK_FILE"
+            cp "$APK_FILE" release-apks/uconnect-audio-hub-debug.apk
+          else
+            echo "ERROR: No APK found in app/build/outputs/apk/debug/"
+            exit 1
+          fi
+          ls -lh release-apks/
+
+      - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: uconnect-audio-hub-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          path: release-apks/uconnect-audio-hub-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create or Update GitHub Release with Direct APK Download
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-latest
+          name: "Uconnect Audio Hub APK (Latest Build)"
+          body: |
+            ### Automated Build: Uconnect Audio Hub & 2-Channel RF/IR Diagnostic
+            Direct download link for Android:
+            * **[Download uconnect-audio-hub-debug.apk](https://github.com/${{ github.repository }}/releases/download/v1.0.0-latest/uconnect-audio-hub-debug.apk)**
+          files: release-apks/uconnect-audio-hub-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-web:
     name: Build Web Applet
