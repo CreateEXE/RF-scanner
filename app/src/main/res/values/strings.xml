@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Uconnect Audio Hub</string>
+    <string name="channel_1_label">Channel 1 (Carrier A)</string>
+    <string name="channel_2_label">Channel 2 (Carrier B)</string>
+    <string name="test_tone_start">Play Channel Test</string>
+    <string name="test_tone_stop">Stop Test Audio</string>
+    <string name="pairing_guide_title">How to Connect Uconnect Headphones</string>
+</resources>
