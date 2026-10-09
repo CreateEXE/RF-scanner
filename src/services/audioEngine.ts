@@ -452,6 +452,7 @@ class AudioEngine {
 
     const buffer = new Float32Array(this.analyser.fftSize);
     const freqData = new Float32Array(this.analyser.frequencyBinCount);
+    let lastCallbackTime = 0;
 
     const update = () => {
       if (!this.isRunning || !this.analyser) return;
@@ -490,7 +491,9 @@ class AudioEngine {
       const nyquist = (this.ctx?.sampleRate || 44100) / 2;
       const activeFrequency = Math.round((peakBin / freqData.length) * nyquist);
 
-      if (this.metricsCallback) {
+      const now = performance.now();
+      if (this.metricsCallback && (now - lastCallbackTime >= 50)) {
+        lastCallbackTime = now;
         this.metricsCallback({
           currentDb: Math.round(currentDb * 10) / 10,
           peakDb: Math.round(this.peakHoldDb * 10) / 10,

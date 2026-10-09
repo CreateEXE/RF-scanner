@@ -43,24 +43,28 @@ export default function App() {
   });
 
   const [breachCount, setBreachCount] = useState<number>(0);
-  const [lastBreached, setLastBreached] = useState<boolean>(false);
+  const lastBreachedRef = React.useRef<boolean>(false);
 
   // Source & Navigation State
   const [currentSource, setCurrentSource] = useState<AudioSourceType>('generator');
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [showWizard, setShowWizard] = useState<boolean>(false);
 
-  // Hook into audio engine metrics
+  // Update threshold in engine
   useEffect(() => {
     audioEngine.setThreshold(thresholdDb);
+  }, [thresholdDb]);
+
+  // Hook into audio engine metrics
+  useEffect(() => {
     audioEngine.onMetrics((m) => {
       setMetrics(m);
-      if (m.isThresholdBreached && !lastBreached) {
+      if (m.isThresholdBreached && !lastBreachedRef.current) {
         setBreachCount((prev) => prev + 1);
       }
-      setLastBreached(m.isThresholdBreached);
+      lastBreachedRef.current = m.isThresholdBreached;
     });
-  }, [thresholdDb, lastBreached]);
+  }, []);
 
   const handleUpdateCustomBand = (minHz: number, maxHz: number) => {
     setSelectedBand({

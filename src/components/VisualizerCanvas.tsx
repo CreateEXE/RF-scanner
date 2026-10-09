@@ -24,7 +24,27 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const peaksRef = useRef<number[]>([]);
-  const historyRef = useRef<ImageData | null>(null);
+  const propsRef = useRef({
+    mode,
+    selectedBand,
+    thresholdDb,
+    isBreached,
+    highlightColor,
+    normalColor,
+    sensitivity,
+  });
+
+  useEffect(() => {
+    propsRef.current = {
+      mode,
+      selectedBand,
+      thresholdDb,
+      isBreached,
+      highlightColor,
+      normalColor,
+      sensitivity,
+    };
+  }, [mode, selectedBand, thresholdDb, isBreached, highlightColor, normalColor, sensitivity]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,11 +56,13 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
 
     const handleResize = () => {
       if (containerRef.current && canvas) {
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = containerRef.current.getBoundingClientRect();
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.scale(dpr, dpr);
+        if (rect.width > 0 && rect.height > 0) {
+          canvas.width = Math.floor(rect.width * dpr);
+          canvas.height = Math.floor(rect.height * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
       }
     };
 
@@ -48,6 +70,16 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
     window.addEventListener('resize', handleResize);
 
     const render = () => {
+      const {
+        mode: currentMode,
+        selectedBand: currentBand,
+        thresholdDb: currentThreshold,
+        isBreached: currentBreached,
+        highlightColor: currentHighlight,
+        normalColor: currentNormal,
+        sensitivity: currentSensitivity,
+      } = propsRef.current;
+
       const analyser = audioEngine.getAnalyser();
       const rect = containerRef.current?.getBoundingClientRect();
       const width = rect?.width || 800;
@@ -76,7 +108,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
       // If audio is inactive, draw idle wave
       if (!analyser || !audioEngine.isActive()) {
         ctx.beginPath();
-        ctx.strokeStyle = isBreached ? highlightColor : '#334155';
+        ctx.strokeStyle = currentBreached ? currentHighlight : '#334155';
         ctx.lineWidth = 2;
         const midY = height / 2;
         for (let x = 0; x < width; x += 4) {
@@ -106,23 +138,23 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
       const nyquist = sampleRate / 2;
 
       // Calculate frequency indices for the chosen band
-      const minBin = Math.max(0, Math.floor((selectedBand.minHz / nyquist) * bufferLength));
-      const maxBin = Math.min(bufferLength - 1, Math.ceil((selectedBand.maxHz / nyquist) * bufferLength));
+      const minBin = Math.max(0, Math.floor((currentBand.minHz / nyquist) * bufferLength));
+      const maxBin = Math.min(bufferLength - 1, Math.ceil((currentBand.maxHz / nyquist) * bufferLength));
       const bandBinCount = Math.max(1, maxBin - minBin);
 
       // Map dB threshold to a relative horizontal line on the canvas
       // Analyser range is -90 dB to -10 dB -> 0 to height
       const minDb = analyser.minDecibels;
       const maxDb = analyser.maxDecibels;
-      const thresholdRatio = Math.max(0, Math.min(1, (thresholdDb - minDb) / (maxDb - minDb)));
+      const thresholdRatio = Math.max(0, Math.min(1, (currentThreshold - minDb) / (maxDb - minDb)));
       const thresholdY = height - thresholdRatio * height;
 
       // Active color changes depending on threshold breach!
-      const activePrimary = isBreached ? highlightColor : normalColor;
-      const activeSecondary = isBreached ? '#fbbf24' : '#38bdf8'; // Amber-400 or Sky-400
+      const activePrimary = currentBreached ? currentHighlight : currentNormal;
+      const activeSecondary = currentBreached ? '#fbbf24' : '#38bdf8'; // Amber-400 or Sky-400
 
       // Render based on visualizer mode
-      switch (mode) {
+      switch (currentMode) {
         case 'bars': {
           const barCount = Math.min(96, width > 600 ? 64 : 36);
           const barWidth = (width / barCount) * 0.75;
@@ -141,7 +173,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
               sum += freqData[b];
               count++;
             }
-            const avgVal = count > 0 ? (sum / count) * sensitivity : 0;
+            const avgVal = count > 0 ? (sum / count) * currentSensitivity : 0;
             const barHeight = Math.min(height - 10, (avgVal / 255) * (height - 30));
 
             const x = i * (barWidth + barGap) + barGap / 2;
@@ -156,13 +188,13 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
 
             // Draw Bar Gradient
             const grad = ctx.createLinearGradient(0, height, 0, y);
-            if (isBreached) {
+            if (currentBreached) {
               grad.addColorStop(0, '#991b1b'); // Dark red
               grad.addColorStop(0.5, '#ef4444'); // Neon red
               grad.addColorStop(1, '#fde047'); // Yellow warning cap
             } else {
               grad.addColorStop(0, '#0369a1'); // Deep sky blue
-              grad.addColorStop(0.5, selectedBand.color); // Band color
+              grad.addColorStop(0.5, currentBand.color); // Band color
               grad.addColorStop(1, '#a5f3fc'); // Cyan highlight
             }
 
@@ -173,7 +205,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
 
             // Draw floating peak cap
             const peakY = height - peaksRef.current[i];
-            ctx.fillStyle = isBreached ? '#fef08a' : '#ffffff';
+            ctx.fillStyle = currentBreached ? '#fef08a' : '#ffffff';
             ctx.fillRect(x, Math.max(4, peakY - 3), barWidth, 2);
           }
           break;
@@ -186,7 +218,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
           const step = Math.max(2, Math.floor(width / 120));
           for (let x = 0; x <= width; x += step) {
             const binIdx = minBin + Math.floor((x / width) * bandBinCount);
-            const val = (freqData[binIdx] || 0) * sensitivity;
+            const val = (freqData[binIdx] || 0) * currentSensitivity;
             const y = height - (val / 255) * (height - 20);
             ctx.lineTo(x, y);
           }
@@ -194,7 +226,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
           ctx.closePath();
 
           const grad = ctx.createLinearGradient(0, 0, 0, height);
-          if (isBreached) {
+          if (currentBreached) {
             grad.addColorStop(0, 'rgba(239, 68, 68, 0.7)');
             grad.addColorStop(0.7, 'rgba(185, 28, 28, 0.25)');
             grad.addColorStop(1, 'rgba(15, 23, 42, 0)');
@@ -215,7 +247,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
 
         case 'wave': {
           ctx.beginPath();
-          ctx.lineWidth = isBreached ? 3 : 2;
+          ctx.lineWidth = currentBreached ? 3 : 2;
           ctx.strokeStyle = activePrimary;
 
           const sliceWidth = width / bufferLength;
@@ -232,7 +264,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
           // Second harmonic ghost trace
           ctx.beginPath();
           ctx.lineWidth = 1;
-          ctx.strokeStyle = isBreached ? 'rgba(251, 191, 36, 0.4)' : 'rgba(56, 189, 248, 0.3)';
+          ctx.strokeStyle = currentBreached ? 'rgba(251, 191, 36, 0.4)' : 'rgba(56, 189, 248, 0.3)';
           x = 0;
           for (let i = 0; i < bufferLength; i += 2) {
             const v = (timeData[i] - 128) * 1.5 + 128;
@@ -254,7 +286,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
           ctx.beginPath();
           for (let i = 0; i < points; i++) {
             const binIdx = minBin + Math.floor((i / points) * bandBinCount);
-            const val = (freqData[binIdx] || 0) * sensitivity;
+            const val = (freqData[binIdx] || 0) * currentSensitivity;
             const r = baseRadius + (val / 255) * (baseRadius * 1.2);
             const angle = (i / points) * Math.PI * 2;
             const px = centerX + Math.cos(angle) * r;
@@ -269,13 +301,13 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
           ctx.lineWidth = 3;
           ctx.stroke();
 
-          ctx.fillStyle = isBreached ? 'rgba(239, 68, 68, 0.15)' : 'rgba(14, 165, 233, 0.1)';
+          ctx.fillStyle = currentBreached ? 'rgba(239, 68, 68, 0.15)' : 'rgba(14, 165, 233, 0.1)';
           ctx.fill();
 
           // Center pulsing core
           ctx.beginPath();
           ctx.arc(centerX, centerY, baseRadius * 0.4, 0, Math.PI * 2);
-          ctx.fillStyle = isBreached ? '#ef4444' : '#0284c7';
+          ctx.fillStyle = currentBreached ? '#ef4444' : '#0284c7';
           ctx.fill();
           break;
         }
@@ -287,7 +319,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
             const binIdx = minBin + Math.floor((i / 32) * bandBinCount);
             const val = freqData[binIdx] || 0;
             const y = height - (i + 1) * sliceH;
-            const hue = isBreached ? (val > 150 ? 0 : 35) : Math.floor(190 + (val / 255) * 80);
+            const hue = currentBreached ? (val > 150 ? 0 : 35) : Math.floor(190 + (val / 255) * 80);
             ctx.fillStyle = `hsl(${hue}, 90%, ${Math.max(10, Math.min(70, (val / 255) * 80))}%)`;
             ctx.fillRect(0, y, width, sliceH - 1);
           }
@@ -298,31 +330,31 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
       // Draw Decibel Threshold Reference Line across the canvas
       ctx.beginPath();
       ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = isBreached ? '#f87171' : '#94a3b8';
-      ctx.lineWidth = isBreached ? 2 : 1;
+      ctx.strokeStyle = currentBreached ? '#f87171' : '#94a3b8';
+      ctx.lineWidth = currentBreached ? 2 : 1;
       ctx.moveTo(0, thresholdY);
       ctx.lineTo(width, thresholdY);
       ctx.stroke();
       ctx.setLineDash([]); // Reset line dash
 
       // Draw Threshold Label on the right
-      ctx.fillStyle = isBreached ? '#fca5a5' : '#cbd5e1';
+      ctx.fillStyle = currentBreached ? '#fca5a5' : '#cbd5e1';
       ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'right';
-      ctx.fillText(`THRESHOLD: ${thresholdDb} dBFS`, width - 12, Math.max(16, thresholdY - 6));
+      ctx.fillText(`THRESHOLD: ${currentThreshold} dBFS`, width - 12, Math.max(16, thresholdY - 6));
 
       // Draw Focus Band Tag on top-left
-      ctx.fillStyle = selectedBand.color;
+      ctx.fillStyle = currentBand.color;
       ctx.font = '11px monospace';
       ctx.textAlign = 'left';
       ctx.fillText(
-        `BAND: ${selectedBand.label.toUpperCase()} [${selectedBand.minHz}Hz - ${selectedBand.maxHz >= 1000 ? `${selectedBand.maxHz / 1000}kHz` : `${selectedBand.maxHz}Hz`}]`,
+        `BAND: ${currentBand.label.toUpperCase()} [${currentBand.minHz}Hz - ${currentBand.maxHz >= 1000 ? `${currentBand.maxHz / 1000}kHz` : `${currentBand.maxHz}Hz`}]`,
         14,
         22
       );
 
       // If threshold is breached, draw flashing alert overlay / vignette
-      if (isBreached) {
+      if (currentBreached) {
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
         ctx.lineWidth = 4;
         ctx.strokeRect(2, 2, width - 4, height - 4);
@@ -345,7 +377,7 @@ export const VisualizerCanvas: React.FC<VisualizerCanvasProps> = ({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
     };
-  }, [mode, selectedBand, thresholdDb, isBreached, highlightColor, normalColor, sensitivity]);
+  }, []);
 
   return (
     <div
